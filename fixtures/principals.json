@@ -1,0 +1,27 @@
+{
+  "alice-editor": {
+    "user_id": "demo-alice",
+    "tenant_id": "tenant-a",
+    "role": "editor"
+  },
+  "alice-reader": {
+    "user_id": "demo-alice",
+    "tenant_id": "tenant-a",
+    "role": "reader"
+  },
+  "bob-editor": {
+    "user_id": "demo-bob",
+    "tenant_id": "tenant-a",
+    "role": "editor"
+  },
+  "admin-a": {
+    "user_id": "demo-admin",
+    "tenant_id": "tenant-a",
+    "role": "tenant_admin"
+  },
+  "alice-b": {
+    "user_id": "demo-alice",
+    "tenant_id": "tenant-b",
+    "role": "editor"
+  }
+}

@@ -1,0 +1,432 @@
+{
+  "schema_version": 1,
+  "scope": "synthetic in-process experiment only",
+  "cases": 13,
+  "all_expectations_met": true,
+  "results": [
+    {
+      "case": "owner-read",
+      "unsafe_status": 200,
+      "unsafe_matches_expected": true,
+      "hardened_status": 200,
+      "hardened_matches_expected": true
+    },
+    {
+      "case": "peer-read",
+      "unsafe_status": 200,
+      "unsafe_matches_expected": true,
+      "hardened_status": 404,
+      "hardened_matches_expected": true
+    },
+    {
+      "case": "cross-tenant-same-user",
+      "unsafe_status": 200,
+      "unsafe_matches_expected": true,
+      "hardened_status": 404,
+      "hardened_matches_expected": true
+    },
+    {
+      "case": "admin-cross-tenant",
+      "unsafe_status": 200,
+      "unsafe_matches_expected": true,
+      "hardened_status": 404,
+      "hardened_matches_expected": true
+    },
+    {
+      "case": "peer-write",
+      "unsafe_status": 200,
+      "unsafe_matches_expected": true,
+      "unsafe_store_changed": true,
+      "hardened_status": 404,
+      "hardened_matches_expected": true,
+      "hardened_store_changed": false
+    },
+    {
+      "case": "cross-tenant-write",
+      "unsafe_status": 200,
+      "unsafe_matches_expected": true,
+      "unsafe_store_changed": true,
+      "hardened_status": 404,
+      "hardened_matches_expected": true,
+      "hardened_store_changed": false
+    },
+    {
+      "case": "reader-write-denied",
+      "unsafe_status": 403,
+      "unsafe_matches_expected": true,
+      "unsafe_store_changed": false,
+      "hardened_status": 403,
+      "hardened_matches_expected": true,
+      "hardened_store_changed": false
+    },
+    {
+      "case": "owner-write",
+      "unsafe_status": 200,
+      "unsafe_matches_expected": true,
+      "unsafe_store_changed": true,
+      "hardened_status": 200,
+      "hardened_matches_expected": true,
+      "hardened_store_changed": true
+    },
+    {
+      "case": "tenant-admin-peer-write",
+      "unsafe_status": 200,
+      "unsafe_matches_expected": true,
+      "unsafe_store_changed": true,
+      "hardened_status": 200,
+      "hardened_matches_expected": true,
+      "hardened_store_changed": true
+    },
+    {
+      "case": "anonymous-denied",
+      "unsafe_status": 401,
+      "unsafe_matches_expected": true,
+      "hardened_status": 401,
+      "hardened_matches_expected": true
+    },
+    {
+      "case": "owner-injection-denied",
+      "unsafe_status": 422,
+      "unsafe_matches_expected": true,
+      "unsafe_store_changed": false,
+      "hardened_status": 422,
+      "hardened_matches_expected": true,
+      "hardened_store_changed": false
+    },
+    {
+      "case": "missing-document",
+      "unsafe_status": 404,
+      "unsafe_matches_expected": true,
+      "hardened_status": 404,
+      "hardened_matches_expected": true
+    },
+    {
+      "case": "list-scoped",
+      "unsafe_status": 200,
+      "unsafe_matches_expected": true,
+      "unsafe_visible_documents": 4,
+      "hardened_status": 200,
+      "hardened_matches_expected": true,
+      "hardened_visible_documents": 1
+    }
+  ],
+  "audit_evidence": [
+    {
+      "case": "owner-read",
+      "mode": "unsafe",
+      "actor": "demo-alice",
+      "tenant": "tenant-a",
+      "role": "editor",
+      "action": "read",
+      "resource": "doc-a-alice",
+      "reason": "unsafe_object_scope_omitted",
+      "status": 200,
+      "allowed": true
+    },
+    {
+      "case": "owner-read",
+      "mode": "hardened",
+      "actor": "demo-alice",
+      "tenant": "tenant-a",
+      "role": "editor",
+      "action": "read",
+      "resource": "doc-a-alice",
+      "reason": "tenant_and_object_policy",
+      "status": 200,
+      "allowed": true
+    },
+    {
+      "case": "peer-read",
+      "mode": "unsafe",
+      "actor": "demo-alice",
+      "tenant": "tenant-a",
+      "role": "editor",
+      "action": "read",
+      "resource": "doc-a-bob",
+      "reason": "unsafe_object_scope_omitted",
+      "status": 200,
+      "allowed": true
+    },
+    {
+      "case": "peer-read",
+      "mode": "hardened",
+      "actor": "demo-alice",
+      "tenant": "tenant-a",
+      "role": "editor",
+      "action": "read",
+      "resource": "doc-a-bob",
+      "reason": "owner_mismatch",
+      "status": 404,
+      "allowed": false
+    },
+    {
+      "case": "cross-tenant-same-user",
+      "mode": "unsafe",
+      "actor": "demo-alice",
+      "tenant": "tenant-b",
+      "role": "editor",
+      "action": "read",
+      "resource": "doc-a-alice",
+      "reason": "unsafe_object_scope_omitted",
+      "status": 200,
+      "allowed": true
+    },
+    {
+      "case": "cross-tenant-same-user",
+      "mode": "hardened",
+      "actor": "demo-alice",
+      "tenant": "tenant-b",
+      "role": "editor",
+      "action": "read",
+      "resource": "doc-a-alice",
+      "reason": "tenant_mismatch",
+      "status": 404,
+      "allowed": false
+    },
+    {
+      "case": "admin-cross-tenant",
+      "mode": "unsafe",
+      "actor": "demo-admin",
+      "tenant": "tenant-a",
+      "role": "tenant_admin",
+      "action": "read",
+      "resource": "doc-b-alice",
+      "reason": "unsafe_object_scope_omitted",
+      "status": 200,
+      "allowed": true
+    },
+    {
+      "case": "admin-cross-tenant",
+      "mode": "hardened",
+      "actor": "demo-admin",
+      "tenant": "tenant-a",
+      "role": "tenant_admin",
+      "action": "read",
+      "resource": "doc-b-alice",
+      "reason": "tenant_mismatch",
+      "status": 404,
+      "allowed": false
+    },
+    {
+      "case": "peer-write",
+      "mode": "unsafe",
+      "actor": "demo-alice",
+      "tenant": "tenant-a",
+      "role": "editor",
+      "action": "write",
+      "resource": "doc-a-bob",
+      "reason": "unsafe_object_scope_omitted",
+      "status": 200,
+      "allowed": true
+    },
+    {
+      "case": "peer-write",
+      "mode": "hardened",
+      "actor": "demo-alice",
+      "tenant": "tenant-a",
+      "role": "editor",
+      "action": "write",
+      "resource": "doc-a-bob",
+      "reason": "owner_mismatch",
+      "status": 404,
+      "allowed": false
+    },
+    {
+      "case": "cross-tenant-write",
+      "mode": "unsafe",
+      "actor": "demo-admin",
+      "tenant": "tenant-a",
+      "role": "tenant_admin",
+      "action": "write",
+      "resource": "doc-b-alice",
+      "reason": "unsafe_object_scope_omitted",
+      "status": 200,
+      "allowed": true
+    },
+    {
+      "case": "cross-tenant-write",
+      "mode": "hardened",
+      "actor": "demo-admin",
+      "tenant": "tenant-a",
+      "role": "tenant_admin",
+      "action": "write",
+      "resource": "doc-b-alice",
+      "reason": "tenant_mismatch",
+      "status": 404,
+      "allowed": false
+    },
+    {
+      "case": "reader-write-denied",
+      "mode": "unsafe",
+      "actor": "demo-alice",
+      "tenant": "tenant-a",
+      "role": "reader",
+      "action": "write",
+      "resource": "doc-a-alice",
+      "reason": "unsafe_object_scope_omitted",
+      "status": 403,
+      "allowed": false
+    },
+    {
+      "case": "reader-write-denied",
+      "mode": "hardened",
+      "actor": "demo-alice",
+      "tenant": "tenant-a",
+      "role": "reader",
+      "action": "write",
+      "resource": "doc-a-alice",
+      "reason": "read_only_role",
+      "status": 403,
+      "allowed": false
+    },
+    {
+      "case": "owner-write",
+      "mode": "unsafe",
+      "actor": "demo-alice",
+      "tenant": "tenant-a",
+      "role": "editor",
+      "action": "write",
+      "resource": "doc-a-alice",
+      "reason": "unsafe_object_scope_omitted",
+      "status": 200,
+      "allowed": true
+    },
+    {
+      "case": "owner-write",
+      "mode": "hardened",
+      "actor": "demo-alice",
+      "tenant": "tenant-a",
+      "role": "editor",
+      "action": "write",
+      "resource": "doc-a-alice",
+      "reason": "tenant_and_object_policy",
+      "status": 200,
+      "allowed": true
+    },
+    {
+      "case": "tenant-admin-peer-write",
+      "mode": "unsafe",
+      "actor": "demo-admin",
+      "tenant": "tenant-a",
+      "role": "tenant_admin",
+      "action": "write",
+      "resource": "doc-a-bob",
+      "reason": "unsafe_object_scope_omitted",
+      "status": 200,
+      "allowed": true
+    },
+    {
+      "case": "tenant-admin-peer-write",
+      "mode": "hardened",
+      "actor": "demo-admin",
+      "tenant": "tenant-a",
+      "role": "tenant_admin",
+      "action": "write",
+      "resource": "doc-a-bob",
+      "reason": "tenant_and_object_policy",
+      "status": 200,
+      "allowed": true
+    },
+    {
+      "case": "anonymous-denied",
+      "mode": "unsafe",
+      "actor": null,
+      "tenant": null,
+      "role": null,
+      "action": "GET",
+      "resource": null,
+      "reason": "unauthenticated",
+      "status": 401,
+      "allowed": false
+    },
+    {
+      "case": "anonymous-denied",
+      "mode": "hardened",
+      "actor": null,
+      "tenant": null,
+      "role": null,
+      "action": "GET",
+      "resource": null,
+      "reason": "unauthenticated",
+      "status": 401,
+      "allowed": false
+    },
+    {
+      "case": "owner-injection-denied",
+      "mode": "unsafe",
+      "actor": "demo-alice",
+      "tenant": "tenant-a",
+      "role": "editor",
+      "action": "PATCH",
+      "resource": null,
+      "reason": "request_rejected",
+      "status": 422,
+      "allowed": false
+    },
+    {
+      "case": "owner-injection-denied",
+      "mode": "hardened",
+      "actor": "demo-alice",
+      "tenant": "tenant-a",
+      "role": "editor",
+      "action": "PATCH",
+      "resource": null,
+      "reason": "request_rejected",
+      "status": 422,
+      "allowed": false
+    },
+    {
+      "case": "missing-document",
+      "mode": "unsafe",
+      "actor": "demo-alice",
+      "tenant": "tenant-a",
+      "role": "editor",
+      "action": "read",
+      "resource": "doc-missing",
+      "reason": "not_found",
+      "status": 404,
+      "allowed": false
+    },
+    {
+      "case": "missing-document",
+      "mode": "hardened",
+      "actor": "demo-alice",
+      "tenant": "tenant-a",
+      "role": "editor",
+      "action": "read",
+      "resource": "doc-missing",
+      "reason": "not_found",
+      "status": 404,
+      "allowed": false
+    },
+    {
+      "case": "list-scoped",
+      "mode": "unsafe",
+      "actor": "demo-alice",
+      "tenant": "tenant-a",
+      "role": "editor",
+      "action": "list",
+      "resource": null,
+      "reason": "unsafe_list_unfiltered",
+      "status": 200,
+      "allowed": true
+    },
+    {
+      "case": "list-scoped",
+      "mode": "hardened",
+      "actor": "demo-alice",
+      "tenant": "tenant-a",
+      "role": "editor",
+      "action": "list",
+      "resource": null,
+      "reason": "tenant_owner_filter",
+      "status": 200,
+      "allowed": true
+    }
+  ],
+  "limitations": [
+    "Not a production authentication service or RAG retrieval system.",
+    "No real user data, external target or model involved.",
+    "Passing cases do not prove authorization completeness."
+  ]
+}

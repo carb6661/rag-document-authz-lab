@@ -1,0 +1,133 @@
+[
+  {
+    "id": "owner-read",
+    "actor": "alice-editor",
+    "method": "GET",
+    "resource": "doc-a-alice",
+    "unsafe_status": 200,
+    "hardened_status": 200
+  },
+  {
+    "id": "peer-read",
+    "actor": "alice-editor",
+    "method": "GET",
+    "resource": "doc-a-bob",
+    "unsafe_status": 200,
+    "hardened_status": 404
+  },
+  {
+    "id": "cross-tenant-same-user",
+    "actor": "alice-b",
+    "method": "GET",
+    "resource": "doc-a-alice",
+    "unsafe_status": 200,
+    "hardened_status": 404
+  },
+  {
+    "id": "admin-cross-tenant",
+    "actor": "admin-a",
+    "method": "GET",
+    "resource": "doc-b-alice",
+    "unsafe_status": 200,
+    "hardened_status": 404
+  },
+  {
+    "id": "peer-write",
+    "actor": "alice-editor",
+    "method": "PATCH",
+    "resource": "doc-a-bob",
+    "body": {
+      "text": "原创演示变更",
+      "expected_version": 1
+    },
+    "unsafe_status": 200,
+    "hardened_status": 404
+  },
+  {
+    "id": "cross-tenant-write",
+    "actor": "admin-a",
+    "method": "PATCH",
+    "resource": "doc-b-alice",
+    "body": {
+      "text": "原创演示变更",
+      "expected_version": 1
+    },
+    "unsafe_status": 200,
+    "hardened_status": 404
+  },
+  {
+    "id": "reader-write-denied",
+    "actor": "alice-reader",
+    "method": "PATCH",
+    "resource": "doc-a-alice",
+    "body": {
+      "text": "原创演示变更",
+      "expected_version": 1
+    },
+    "unsafe_status": 403,
+    "hardened_status": 403
+  },
+  {
+    "id": "owner-write",
+    "actor": "alice-editor",
+    "method": "PATCH",
+    "resource": "doc-a-alice",
+    "body": {
+      "text": "原创演示变更",
+      "expected_version": 1
+    },
+    "unsafe_status": 200,
+    "hardened_status": 200
+  },
+  {
+    "id": "tenant-admin-peer-write",
+    "actor": "admin-a",
+    "method": "PATCH",
+    "resource": "doc-a-bob",
+    "body": {
+      "text": "原创演示变更",
+      "expected_version": 1
+    },
+    "unsafe_status": 200,
+    "hardened_status": 200
+  },
+  {
+    "id": "anonymous-denied",
+    "actor": null,
+    "method": "GET",
+    "resource": "doc-a-alice",
+    "unsafe_status": 401,
+    "hardened_status": 401
+  },
+  {
+    "id": "owner-injection-denied",
+    "actor": "alice-editor",
+    "method": "PATCH",
+    "resource": "doc-a-alice",
+    "body": {
+      "owner_id": "demo-alice",
+      "text": "原创演示变更",
+      "expected_version": 1
+    },
+    "unsafe_status": 422,
+    "hardened_status": 422
+  },
+  {
+    "id": "missing-document",
+    "actor": "alice-editor",
+    "method": "GET",
+    "resource": "doc-missing",
+    "unsafe_status": 404,
+    "hardened_status": 404
+  },
+  {
+    "id": "list-scoped",
+    "actor": "alice-editor",
+    "method": "GET",
+    "resource": null,
+    "unsafe_status": 200,
+    "hardened_status": 200,
+    "unsafe_count": 4,
+    "hardened_count": 1
+  }
+]

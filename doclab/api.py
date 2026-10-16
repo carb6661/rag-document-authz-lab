@@ -1,6 +1,8 @@
 """Hardened object API; unsafe switch is only used in local in-process comparisons."""
 from collections import deque
 from copy import deepcopy
+from datetime import datetime, timezone
+import asyncio
 import json
 from pathlib import Path
 import threading
@@ -12,43 +14,16 @@ from fastapi.exceptions import RequestValidationError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import JSONResponse
 
-from .models import Document, DocumentPatch, Principal
+from .models import Document, DocumentPatch, Principal, RetrievalRequest
+from .ingress import BodyLimit, MAX_BODY
+from .retrieval import rank_authorized
 from .security import Sessions, decide
 
 ROOT = Path(__file__).resolve().parents[1]
-MAX_BODY = 65_536
-
-
-class BodyLimit:
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        if scope["type"] != "http":
-            return await self.app(scope, receive, send)
-        headers = dict(scope.get("headers", []))
-        if scope["method"] == "PATCH" and headers.get(b"content-type", b"").split(b";")[0].strip().lower() != b"application/json":
-            return await JSONResponse({"detail":"JSON required"}, status_code=415)(scope, receive, send)
-        messages, size = [], 0
-        while True:
-            msg = await receive()
-            if msg["type"] == "http.disconnect":
-                return
-            size += len(msg.get("body", b""))
-            if size > MAX_BODY:
-                return await JSONResponse({"detail":"Body too large"}, status_code=413)(scope, receive, send)
-            messages.append(msg)
-            if not msg.get("more_body", False):
-                break
-        async def replay():
-            if messages:
-                return messages.pop(0)
-            return {"type":"http.request","body":b"","more_body":False}
-        await self.app(scope, replay, send)
 
 
 def create_app(*, unsafe=False, sessions=None):
-    app = FastAPI(title="RAG Document Authorization Lab", version="0.1.0")
+    app = FastAPI(title="RAG Document Authorization Lab", version="0.2.0")
     app.state.sessions = sessions or Sessions()
     raw = json.loads((ROOT / "fixtures/documents.json").read_text(encoding="utf-8"))
     parsed = [Document.model_validate(item) for item in raw]
@@ -58,6 +33,7 @@ def create_app(*, unsafe=False, sessions=None):
     app.state.lock = threading.Lock()
     app.state.audit = deque(maxlen=256)
     app.state.audit_lock = threading.Lock()
+    app.state.audit_meta = {"sequence":0, "dropped":0}
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1","localhost","testserver"])
     app.add_middleware(BodyLimit)
 
@@ -67,14 +43,33 @@ def create_app(*, unsafe=False, sessions=None):
                                  "action":request.method, "resource":None,
                                  "reason":"request_rejected"}
         request_id = uuid.uuid4().hex
-        response = await call_next(request)
+
+        def record(status):
+            if not request.url.path.startswith("/v1/"):
+                return
+            event = {"request_id":request_id, **request.state.context, "status":status,
+                     "allowed":200 <= status < 300,
+                     "timestamp":datetime.now(timezone.utc).isoformat()}
+            event["reason"] = request.scope.get("gate_reason", event["reason"])
+            with app.state.audit_lock:
+                app.state.audit_meta["sequence"] += 1
+                if len(app.state.audit) == app.state.audit.maxlen:
+                    app.state.audit_meta["dropped"] += 1
+                event["sequence"] = app.state.audit_meta["sequence"]
+                app.state.audit.append(event)
+
+        try:
+            response = await call_next(request)
+        except asyncio.CancelledError:
+            request.state.context["reason"] = "request_cancelled"
+            record(499)  # Internal audit marker, not a promised wire response.
+            raise
+        except Exception:
+            request.state.context["reason"] = "internal_error"
+            response = JSONResponse({"detail":"Internal server error"}, status_code=500)
         response.headers["X-Request-ID"] = request_id
         response.headers["Cache-Control"] = "no-store"
-        if request.url.path.startswith("/v1/"):
-            record = {"request_id":request_id, **request.state.context,
-                      "status":response.status_code, "allowed":200 <= response.status_code < 300}
-            with app.state.audit_lock:
-                app.state.audit.append(record)
+        record(response.status_code)
         return response
 
     @app.exception_handler(RequestValidationError)
@@ -110,6 +105,22 @@ def create_app(*, unsafe=False, sessions=None):
         with app.state.lock:
             return {"documents":[deepcopy(raw_doc) for raw_doc in app.state.documents.values()
                                  if decide(principal, Document.model_validate(raw_doc), "read", unsafe=unsafe).allowed]}
+
+    @app.post("/v1/retrieve")
+    def retrieve(query: RetrievalRequest, request: Request,
+                 principal: Annotated[Principal, Depends(identity)]):
+        request.state.context.update(action="retrieve",
+            reason="unsafe_retrieval_unfiltered" if unsafe else "authorization_before_scoring")
+        # Authorize and snapshot consistently; never send rejected documents to the scorer.
+        with app.state.lock:
+            snapshots = [deepcopy(raw_doc) for raw_doc in app.state.documents.values()
+                         if decide(principal, Document.model_validate(raw_doc), "read", unsafe=unsafe).allowed]
+        terms = tuple(dict.fromkeys(query.query.casefold().split()))
+        hits = rank_authorized(snapshots, terms, query.top_k)
+        return {"retrieval":"exact-keyword", "hits":hits,
+                "limitations":["Not semantic retrieval or an LLM answer.",
+                               "Citations identify a synthetic document version.",
+                               "Authorization reflects this request's identity snapshot."]}
 
     ResourceID = Annotated[str, APIPath(pattern=r"^[a-z0-9-]{1,64}$")]
 

@@ -64,7 +64,7 @@ def test_api_authorization_matrix(setup, actor, doc, action, allowed):
 
 def test_experiment_and_checked_in_evidence():
     actual = experiment()
-    assert actual["cases"] == 13
+    assert actual["cases"] == 16
     assert actual["all_expectations_met"]
     expected = json.loads((ROOT/"examples/report.json").read_text(encoding="utf-8"))
     assert actual == expected

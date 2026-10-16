@@ -31,12 +31,17 @@ def main():
             other = client.get("/v1/documents/doc-b-alice", headers=header)
             listing = client.get("/v1/documents", headers=header)
             anonymous = client.get("/v1/documents/doc-a-alice")
+            retrieved = client.post("/v1/retrieve",headers=header,json={"query":"原创演示","top_k":10})
+            blocked = client.post("/v1/retrieve",headers=header,json={"query":"同租户"})
             result = {"own_read":own.status_code, "peer_read":peer.status_code,
                       "cross_tenant_read":other.status_code, "anonymous":anonymous.status_code,
                       "visible_documents":len(listing.json()["documents"])}
             assert result == {"own_read":200,"peer_read":404,"cross_tenant_read":404,
                               "anonymous":401,"visible_documents":1}
             print(json.dumps({"live_http":"passed", **result}))
+            assert retrieved.status_code==200 and len(retrieved.json()["hits"])==1
+            assert blocked.status_code==200 and blocked.json()["hits"]==[]
+            print(json.dumps({"live_retrieval":"passed","authorized_hits":1,"foreign_only_hits":0}))
     finally:
         server.should_exit = True
         thread.join(timeout=5)

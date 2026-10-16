@@ -1,0 +1,29 @@
+{
+  "version": "0.1.0",
+  "commit": "5408e89ff68ea346f7e3b6251cea74079d5f6408",
+  "checked_at": "2026-10-16",
+  "scope": "local synthetic regression probes; not evidence of remote exploitation",
+  "observations": {
+    "duplicate_json": {
+      "status": 200,
+      "stored_text": "last"
+    },
+    "duplicate_authorization": {
+      "status": 200
+    },
+    "unexpected_failure": {
+      "status": 500,
+      "audit_events": 0,
+      "request_id_present": false,
+      "no_store": false
+    },
+    "expired_session_cleanup": {
+      "entries_after_new_issue": 4
+    },
+    "empty_asgi_frames": {
+      "received_frames": 1501,
+      "forwarded_frames": 1501,
+      "status": null
+    }
+  }
+}

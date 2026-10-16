@@ -129,5 +129,49 @@
     "hardened_status": 200,
     "unsafe_count": 4,
     "hardened_count": 1
+  },
+  {
+    "id": "authorized-keyword-retrieval",
+    "actor": "alice-editor",
+    "method": "POST",
+    "resource": null,
+    "path": "/v1/retrieve",
+    "body": {
+      "query": "原创演示",
+      "top_k": 10
+    },
+    "unsafe_status": 200,
+    "hardened_status": 200,
+    "unsafe_count": 4,
+    "hardened_count": 1,
+    "result_key": "hits"
+  },
+  {
+    "id": "foreign-only-keyword",
+    "actor": "alice-editor",
+    "method": "POST",
+    "resource": null,
+    "path": "/v1/retrieve",
+    "body": {
+      "query": "同租户"
+    },
+    "unsafe_status": 200,
+    "hardened_status": 200,
+    "unsafe_count": 1,
+    "hardened_count": 0,
+    "result_key": "hits"
+  },
+  {
+    "id": "retrieval-tenant-override-rejected",
+    "actor": "alice-editor",
+    "method": "POST",
+    "resource": null,
+    "path": "/v1/retrieve",
+    "body": {
+      "query": "原创演示",
+      "tenant_id": "tenant-b"
+    },
+    "unsafe_status": 422,
+    "hardened_status": 422
   }
 ]

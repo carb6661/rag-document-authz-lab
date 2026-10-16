@@ -37,3 +37,16 @@ class DocumentPatch(StrictModel):
             except UnicodeError:
                 raise ValueError("invalid Unicode") from None
         return value
+
+
+class RetrievalRequest(StrictModel):
+    query: str = Field(min_length=1, max_length=128)
+    top_k: int = Field(default=5, ge=1, le=10, strict=True)
+
+    @field_validator("query")
+    @classmethod
+    def query_valid(cls, value):
+        DocumentPatch.nonblank(value)
+        if len(set(value.casefold().split())) > 8:
+            raise ValueError("at most eight whitespace-separated terms")
+        return value

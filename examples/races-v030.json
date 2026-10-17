@@ -1,0 +1,29 @@
+{
+  "version": "0.3.0",
+  "verified_on": "2026-10-17",
+  "scope": "finite synthetic in-process interleavings; not a production incident or throughput benchmark",
+  "observations": {
+    "revoke_during_scoring": {
+      "status": 401,
+      "returned_hits": 0,
+      "returned_version": null,
+      "live_version": 1
+    },
+    "change_version_during_scoring": {
+      "status": 409,
+      "returned_hits": 0,
+      "returned_version": null,
+      "live_version": 2
+    },
+    "change_acl_during_scoring": {
+      "status": 409,
+      "returned_hits": 0,
+      "returned_version": null,
+      "live_version": 1
+    },
+    "revoke_before_write_checkpoint": {
+      "status": 401,
+      "document_changed": false
+    }
+  }
+}

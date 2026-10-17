@@ -31,7 +31,7 @@ def experiment():
             audit.pop("timestamp")  # Real UTC timestamps are not part of golden replay.
             evidence.append({"case":case["id"], "mode":mode, **audit})
         rows.append(row)
-    return {"schema_version":2, "scope":"synthetic in-process experiment only",
+    return {"schema_version":3, "scope":"synthetic in-process experiment only",
             "cases":len(rows), "all_expectations_met":all(r["unsafe_matches_expected"] and r["hardened_matches_expected"] for r in rows),
             "results":rows, "audit_evidence":evidence,
             "limitations":["Not a production authentication service or RAG retrieval system.",

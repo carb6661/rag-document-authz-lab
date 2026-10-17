@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "scope": "synthetic in-process experiment only",
   "cases": 16,
   "all_expectations_met": true,
@@ -145,6 +145,7 @@
       "action": "read",
       "resource": "doc-a-alice",
       "reason": "unsafe_object_scope_omitted",
+      "mutation_committed": false,
       "status": 200,
       "allowed": true,
       "sequence": 1
@@ -158,6 +159,7 @@
       "action": "read",
       "resource": "doc-a-alice",
       "reason": "tenant_and_object_policy",
+      "mutation_committed": false,
       "status": 200,
       "allowed": true,
       "sequence": 1
@@ -171,6 +173,7 @@
       "action": "read",
       "resource": "doc-a-bob",
       "reason": "unsafe_object_scope_omitted",
+      "mutation_committed": false,
       "status": 200,
       "allowed": true,
       "sequence": 1
@@ -184,6 +187,7 @@
       "action": "read",
       "resource": "doc-a-bob",
       "reason": "owner_mismatch",
+      "mutation_committed": false,
       "status": 404,
       "allowed": false,
       "sequence": 1
@@ -197,6 +201,7 @@
       "action": "read",
       "resource": "doc-a-alice",
       "reason": "unsafe_object_scope_omitted",
+      "mutation_committed": false,
       "status": 200,
       "allowed": true,
       "sequence": 1
@@ -210,6 +215,7 @@
       "action": "read",
       "resource": "doc-a-alice",
       "reason": "tenant_mismatch",
+      "mutation_committed": false,
       "status": 404,
       "allowed": false,
       "sequence": 1
@@ -223,6 +229,7 @@
       "action": "read",
       "resource": "doc-b-alice",
       "reason": "unsafe_object_scope_omitted",
+      "mutation_committed": false,
       "status": 200,
       "allowed": true,
       "sequence": 1
@@ -236,6 +243,7 @@
       "action": "read",
       "resource": "doc-b-alice",
       "reason": "tenant_mismatch",
+      "mutation_committed": false,
       "status": 404,
       "allowed": false,
       "sequence": 1
@@ -249,6 +257,7 @@
       "action": "write",
       "resource": "doc-a-bob",
       "reason": "unsafe_object_scope_omitted",
+      "mutation_committed": true,
       "status": 200,
       "allowed": true,
       "sequence": 1
@@ -262,6 +271,7 @@
       "action": "write",
       "resource": "doc-a-bob",
       "reason": "owner_mismatch",
+      "mutation_committed": false,
       "status": 404,
       "allowed": false,
       "sequence": 1
@@ -275,6 +285,7 @@
       "action": "write",
       "resource": "doc-b-alice",
       "reason": "unsafe_object_scope_omitted",
+      "mutation_committed": true,
       "status": 200,
       "allowed": true,
       "sequence": 1
@@ -288,6 +299,7 @@
       "action": "write",
       "resource": "doc-b-alice",
       "reason": "tenant_mismatch",
+      "mutation_committed": false,
       "status": 404,
       "allowed": false,
       "sequence": 1
@@ -301,6 +313,7 @@
       "action": "write",
       "resource": "doc-a-alice",
       "reason": "unsafe_object_scope_omitted",
+      "mutation_committed": false,
       "status": 403,
       "allowed": false,
       "sequence": 1
@@ -314,6 +327,7 @@
       "action": "write",
       "resource": "doc-a-alice",
       "reason": "read_only_role",
+      "mutation_committed": false,
       "status": 403,
       "allowed": false,
       "sequence": 1
@@ -327,6 +341,7 @@
       "action": "write",
       "resource": "doc-a-alice",
       "reason": "unsafe_object_scope_omitted",
+      "mutation_committed": true,
       "status": 200,
       "allowed": true,
       "sequence": 1
@@ -340,6 +355,7 @@
       "action": "write",
       "resource": "doc-a-alice",
       "reason": "tenant_and_object_policy",
+      "mutation_committed": true,
       "status": 200,
       "allowed": true,
       "sequence": 1
@@ -353,6 +369,7 @@
       "action": "write",
       "resource": "doc-a-bob",
       "reason": "unsafe_object_scope_omitted",
+      "mutation_committed": true,
       "status": 200,
       "allowed": true,
       "sequence": 1
@@ -366,6 +383,7 @@
       "action": "write",
       "resource": "doc-a-bob",
       "reason": "tenant_and_object_policy",
+      "mutation_committed": true,
       "status": 200,
       "allowed": true,
       "sequence": 1
@@ -379,6 +397,7 @@
       "action": "GET",
       "resource": null,
       "reason": "unauthenticated",
+      "mutation_committed": false,
       "status": 401,
       "allowed": false,
       "sequence": 1
@@ -392,6 +411,7 @@
       "action": "GET",
       "resource": null,
       "reason": "unauthenticated",
+      "mutation_committed": false,
       "status": 401,
       "allowed": false,
       "sequence": 1
@@ -405,6 +425,7 @@
       "action": "PATCH",
       "resource": null,
       "reason": "request_rejected",
+      "mutation_committed": false,
       "status": 422,
       "allowed": false,
       "sequence": 1
@@ -418,6 +439,7 @@
       "action": "PATCH",
       "resource": null,
       "reason": "request_rejected",
+      "mutation_committed": false,
       "status": 422,
       "allowed": false,
       "sequence": 1
@@ -431,6 +453,7 @@
       "action": "read",
       "resource": "doc-missing",
       "reason": "not_found",
+      "mutation_committed": false,
       "status": 404,
       "allowed": false,
       "sequence": 1
@@ -444,6 +467,7 @@
       "action": "read",
       "resource": "doc-missing",
       "reason": "not_found",
+      "mutation_committed": false,
       "status": 404,
       "allowed": false,
       "sequence": 1
@@ -457,6 +481,7 @@
       "action": "list",
       "resource": null,
       "reason": "unsafe_list_unfiltered",
+      "mutation_committed": false,
       "status": 200,
       "allowed": true,
       "sequence": 1
@@ -470,6 +495,7 @@
       "action": "list",
       "resource": null,
       "reason": "tenant_owner_filter",
+      "mutation_committed": false,
       "status": 200,
       "allowed": true,
       "sequence": 1
@@ -483,6 +509,7 @@
       "action": "retrieve",
       "resource": null,
       "reason": "unsafe_retrieval_unfiltered",
+      "mutation_committed": false,
       "status": 200,
       "allowed": true,
       "sequence": 1
@@ -496,6 +523,7 @@
       "action": "retrieve",
       "resource": null,
       "reason": "authorization_before_scoring",
+      "mutation_committed": false,
       "status": 200,
       "allowed": true,
       "sequence": 1
@@ -509,6 +537,7 @@
       "action": "retrieve",
       "resource": null,
       "reason": "unsafe_retrieval_unfiltered",
+      "mutation_committed": false,
       "status": 200,
       "allowed": true,
       "sequence": 1
@@ -522,6 +551,7 @@
       "action": "retrieve",
       "resource": null,
       "reason": "authorization_before_scoring",
+      "mutation_committed": false,
       "status": 200,
       "allowed": true,
       "sequence": 1
@@ -535,6 +565,7 @@
       "action": "POST",
       "resource": null,
       "reason": "request_rejected",
+      "mutation_committed": false,
       "status": 422,
       "allowed": false,
       "sequence": 1
@@ -548,6 +579,7 @@
       "action": "POST",
       "resource": null,
       "reason": "request_rejected",
+      "mutation_committed": false,
       "status": 422,
       "allowed": false,
       "sequence": 1

@@ -1,5 +1,6 @@
 """Opaque, ephemeral local sessions; authorization is independent of token format."""
-from dataclasses import dataclass
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 import hashlib
 import re
 import secrets
@@ -10,6 +11,29 @@ from .models import Document, Principal
 
 class SessionCapacityError(RuntimeError):
     pass
+
+
+class SessionInvalidatedError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class SessionTicket:
+    identifier: str = field(repr=False)
+    principal: Principal
+
+
+class SessionLease:
+    """Thread-bound check callable, valid only while its session lock is held."""
+    def __init__(self, validate):
+        self._validate = validate
+        self._owner = threading.get_ident()
+        self._active = True
+
+    def check(self):
+        if not self._active or self._owner != threading.get_ident():
+            raise RuntimeError("session lease used outside its owning checkpoint")
+        return self._validate()
 
 
 class Sessions:
@@ -44,7 +68,7 @@ class Sessions:
             self._items[digest] = (principal, now + ttl)
         return token
 
-    def resolve(self, token):
+    def authenticate(self, token):
         if not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9_-]{43}", token):
             return None
         digest = hashlib.sha256(token.encode("ascii")).hexdigest()
@@ -55,7 +79,34 @@ class Sessions:
             if item[1] <= self.clock():
                 self._items.pop(digest, None)
                 return None
-            return item[0]
+            return SessionTicket(digest, item[0])
+
+    def resolve(self, token):
+        ticket = self.authenticate(token)
+        return ticket.principal if ticket is not None else None
+
+    @contextmanager
+    def checkpoint(self, ticket):
+        """Short synchronous section, serialized with expiry checks/revocation.
+
+        Lock order is session -> document. Never call a Sessions method, network
+        I/O, await, or an untrusted callback while inside this section.
+        """
+        with self._lock:
+            def validate():
+                item = self._items.get(ticket.identifier) if isinstance(ticket, SessionTicket) else None
+                now = self.clock()
+                if item is None or item[1] <= now or item[0] != ticket.principal:
+                    if item is not None and item[1] <= now:
+                        self._items.pop(ticket.identifier, None)
+                    raise SessionInvalidatedError("session no longer valid at checkpoint")
+                return item[0]
+            lease = SessionLease(validate)
+            lease.check()
+            try:
+                yield lease
+            finally:
+                lease._active = False
 
     def revoke(self, token):
         if not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9_-]{43}", token):

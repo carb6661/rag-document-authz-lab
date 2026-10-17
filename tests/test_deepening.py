@@ -264,7 +264,7 @@ def test_retrieval_top_k_and_stable_ties(setup):
     assert response.json()["hits"][0]["document_id"]=="doc-a-alice"
 
 
-def test_inflight_revocation_snapshot_limitation(setup,monkeypatch):
+def test_inflight_revocation_blocked_at_publication(setup,monkeypatch):
     app,client,values=setup
     original=retrieval.score_document
     def revoke_during_score(document,terms):
@@ -272,8 +272,7 @@ def test_inflight_revocation_snapshot_limitation(setup,monkeypatch):
         return original(document,terms)
     monkeypatch.setattr(retrieval,"score_document",revoke_during_score)
     response=client.post("/v1/retrieve",headers=headers(values),json={"query":"原创演示"})
-    # Known, documented boundary: this request already holds its identity snapshot.
-    assert response.status_code==200 and len(response.json()["hits"])==1
+    assert response.status_code==401 and "hits" not in response.json()
     assert client.post("/v1/retrieve",headers=headers(values),json={"query":"原创演示"}).status_code==401
 
 

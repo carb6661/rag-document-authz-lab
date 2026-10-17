@@ -6,6 +6,7 @@ import time
 import httpx
 import uvicorn
 from .api import create_app, demo_tokens
+from . import retrieval
 
 
 def main():
@@ -42,6 +43,30 @@ def main():
             assert retrieved.status_code==200 and len(retrieved.json()["hits"])==1
             assert blocked.status_code==200 and blocked.json()["hits"]==[]
             print(json.dumps({"live_retrieval":"passed","authorized_hits":1,"foreign_only_hits":0}))
+            # Finite local intervention in this dedicated server only; no external target.
+            original = retrieval.score_document
+            def change_during_score(document,terms):
+                with app.state.lock:
+                    app.state.documents[document["id"]]["version"] += 1
+                return original(document,terms)
+            def revoke_during_score(document,terms):
+                app.state.sessions.revoke_subject("tenant-a","demo-alice")
+                return original(document,terms)
+            try:
+                retrieval.score_document = change_during_score
+                stale = client.post("/v1/retrieve",headers=header,json={"query":"原创演示"})
+                assert stale.status_code == 409 and "hits" not in stale.json()
+                retrieval.score_document = original
+                fresh = client.post("/v1/retrieve",headers=header,json={"query":"原创演示"})
+                assert fresh.status_code == 200 and fresh.json()["hits"][0]["version"] == 2
+                retrieval.score_document = revoke_during_score
+                revoked = client.post("/v1/retrieve",headers=header,json={"query":"原创演示"})
+                assert revoked.status_code == 401 and "hits" not in revoked.json()
+                assert client.get("/v1/documents/doc-a-alice",headers=header).status_code == 401
+                print(json.dumps({"live_checkpoints":"passed","stale_snapshot":409,
+                                  "fresh_version":2,"revoked_during_score":401}))
+            finally:
+                retrieval.score_document = original
     finally:
         server.should_exit = True
         thread.join(timeout=5)

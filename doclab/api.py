@@ -17,13 +17,14 @@ from starlette.responses import JSONResponse
 from .models import Document, DocumentPatch, Principal, RetrievalRequest
 from .ingress import BodyLimit, MAX_BODY
 from .retrieval import rank_authorized
-from .security import Sessions, decide
+from .security import Sessions, SessionInvalidatedError, decide
+from .publication import PublicationGuard
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def create_app(*, unsafe=False, sessions=None):
-    app = FastAPI(title="RAG Document Authorization Lab", version="0.2.0")
+    app = FastAPI(title="RAG Document Authorization Lab", version="0.3.0")
     app.state.sessions = sessions or Sessions()
     raw = json.loads((ROOT / "fixtures/documents.json").read_text(encoding="utf-8"))
     parsed = [Document.model_validate(item) for item in raw]
@@ -36,12 +37,15 @@ def create_app(*, unsafe=False, sessions=None):
     app.state.audit_meta = {"sequence":0, "dropped":0}
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1","localhost","testserver"])
     app.add_middleware(BodyLimit)
+    app.add_middleware(PublicationGuard, sessions=app.state.sessions,
+        documents=lambda:app.state.documents, document_lock=app.state.lock,
+        policy=lambda principal, doc, action:decide(principal,doc,action,unsafe=unsafe))
 
     @app.middleware("http")
     async def audit(request, call_next):
         request.state.context = {"actor":None, "tenant":None, "role":None,
                                  "action":request.method, "resource":None,
-                                 "reason":"request_rejected"}
+                                 "reason":"request_rejected", "mutation_committed":False}
         request_id = uuid.uuid4().hex
 
         def record(status):
@@ -76,13 +80,24 @@ def create_app(*, unsafe=False, sessions=None):
     async def validation_error(request, exc):
         return JSONResponse({"detail":"Invalid request schema"}, status_code=422)
 
+    @app.exception_handler(SessionInvalidatedError)
+    async def invalid_session(request, exc):
+        request.state.context["reason"] = "checkpoint_session_invalidated"
+        return JSONResponse({"detail":"Authentication required"},status_code=401,
+                            headers={"WWW-Authenticate":"Bearer"})
+
+    def remember(request, rows, action):
+        request.state.publication_docs = tuple((row["id"],row["version"],action) for row in rows)
+
     def identity(request: Request):
         header = request.headers.get("authorization", "")
         scheme, _, token = header.partition(" ")
-        principal = app.state.sessions.resolve(token) if scheme.lower() == "bearer" else None
-        if principal is None:
+        ticket = app.state.sessions.authenticate(token) if scheme.lower() == "bearer" else None
+        if ticket is None:
             request.state.context["reason"] = "unauthenticated"
             raise HTTPException(401, "Authentication required", headers={"WWW-Authenticate":"Bearer"})
+        request.state.session_ticket = ticket
+        principal = ticket.principal
         request.state.context.update(actor=principal.user_id, tenant=principal.tenant_id, role=principal.role)
         return principal
 
@@ -102,9 +117,11 @@ def create_app(*, unsafe=False, sessions=None):
     @app.get("/v1/documents")
     def list_documents(request: Request, principal: Annotated[Principal, Depends(identity)]):
         request.state.context.update(action="list", reason="unsafe_list_unfiltered" if unsafe else "tenant_owner_filter")
-        with app.state.lock:
-            return {"documents":[deepcopy(raw_doc) for raw_doc in app.state.documents.values()
-                                 if decide(principal, Document.model_validate(raw_doc), "read", unsafe=unsafe).allowed]}
+        with app.state.sessions.checkpoint(request.state.session_ticket), app.state.lock:
+            rows = [deepcopy(raw_doc) for raw_doc in app.state.documents.values()
+                    if decide(principal, Document.model_validate(raw_doc), "read", unsafe=unsafe).allowed]
+            remember(request, rows, "read")
+            return {"documents":rows}
 
     @app.post("/v1/retrieve")
     def retrieve(query: RetrievalRequest, request: Request,
@@ -112,15 +129,16 @@ def create_app(*, unsafe=False, sessions=None):
         request.state.context.update(action="retrieve",
             reason="unsafe_retrieval_unfiltered" if unsafe else "authorization_before_scoring")
         # Authorize and snapshot consistently; never send rejected documents to the scorer.
-        with app.state.lock:
+        with app.state.sessions.checkpoint(request.state.session_ticket), app.state.lock:
             snapshots = [deepcopy(raw_doc) for raw_doc in app.state.documents.values()
                          if decide(principal, Document.model_validate(raw_doc), "read", unsafe=unsafe).allowed]
+            remember(request, snapshots, "read")
         terms = tuple(dict.fromkeys(query.query.casefold().split()))
         hits = rank_authorized(snapshots, terms, query.top_k)
         return {"retrieval":"exact-keyword", "hits":hits,
                 "limitations":["Not semantic retrieval or an LLM answer.",
                                "Citations identify a synthetic document version.",
-                               "Authorization reflects this request's identity snapshot."]}
+                               "Session, access and versions are rechecked before response start; later changes cannot recall sent data."]}
 
     ResourceID = Annotated[str, APIPath(pattern=r"^[a-z0-9-]{1,64}$")]
 
@@ -128,9 +146,10 @@ def create_app(*, unsafe=False, sessions=None):
     def read_document(resource_id: ResourceID, request: Request,
                       principal: Annotated[Principal, Depends(identity)]):
         request.state.context["resource"] = resource_id
-        with app.state.lock:
+        with app.state.sessions.checkpoint(request.state.session_ticket), app.state.lock:
             raw_doc = app.state.documents.get(resource_id)
             authorize(request, principal, raw_doc, "read")
+            remember(request, [raw_doc], "read")
             return deepcopy(raw_doc)
 
     @app.patch("/v1/documents/{resource_id}", response_model=Document)
@@ -140,14 +159,18 @@ def create_app(*, unsafe=False, sessions=None):
         changes = patch.model_dump(exclude_none=True, exclude={"expected_version"})
         if not changes:
             raise HTTPException(422, "No editable fields")
-        with app.state.lock:
+        with app.state.sessions.checkpoint(request.state.session_ticket) as lease, app.state.lock:
             raw_doc = app.state.documents.get(resource_id)
             authorize(request, principal, raw_doc, "write")
             if patch.expected_version != raw_doc["version"]:
                 request.state.context["reason"] = "version_conflict"
                 raise HTTPException(409, "Version conflict")
             updated = {**raw_doc, **changes, "version":raw_doc["version"]+1}
-            app.state.documents[resource_id] = Document.model_validate(updated).model_dump()
+            validated = Document.model_validate(updated).model_dump()
+            lease.check()
+            app.state.documents[resource_id] = validated
+            request.state.context["mutation_committed"] = True
+            remember(request, [updated], "write")
             return deepcopy(updated)
 
     return app

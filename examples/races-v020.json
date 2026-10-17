@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "commit": "9632b64cabf6790a651b71c8d4d48710a9252694",
+  "checked_at": "2026-10-16",
+  "scope": "Synthetic, deterministic race injection; not a production incident",
+  "observations": {
+    "revoke_during_scoring": {
+      "status": 200,
+      "returned_hits": 1,
+      "returned_version": 1,
+      "live_version": 1
+    },
+    "change_version_during_scoring": {
+      "status": 200,
+      "returned_hits": 1,
+      "returned_version": 1,
+      "live_version": 2
+    },
+    "change_acl_during_scoring": {
+      "status": 200,
+      "returned_hits": 1,
+      "returned_version": 1,
+      "live_version": 1
+    },
+    "revoke_before_write_checkpoint": {
+      "status": 200,
+      "document_changed": true
+    }
+  }
+}

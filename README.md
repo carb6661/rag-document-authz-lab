@@ -7,7 +7,18 @@
 
 保护对象是未来可能被 RAG 检索的文档正文及来源元数据。没有接入大模型、嵌入模型或向量数据库，不把它包装成完整 RAG 系统。所有用户、租户和文档均为原创合成数据。
 
-## 0. 0.2版：从权限演示深入到授权检索
+## 0. 0.3版：修正处理中撤销与旧快照
+
+在原仓库继续修正，不另建重复项目。0.2版评分期间撤销会话、改变归属或版本，仍可能返回旧结果；认证后撤销也可能继续写入。0.3加入**写入段会话复核 + 成功响应发布前会话/当前权限/版本复核**。
+
+- 评分中撤销或到期：401，不返回原hits；文档版本、归属等变化：409，不返回旧快照。
+- 认证后、写入检查前撤销：401，数据不变。锁顺序固定为会话→文档，评分与网络发送不占这些锁。
+- 写入已提交、发布前才撤销：可返回401，但**不自动回滚**；审计用mutation_committed区分副作用与HTTP结果。
+- 最终检查通过后仍有发送窗口，无法撤回已发送数据；未实现多进程撤销或完整RAG。
+
+Windows/Python3.12.8实际 **200项测试通过**、16组对照；真实回环HTTP也验证旧快照409和评分中撤销401。完整[问题、根因、方案与局限](docs/REVOCATION_CHECKPOINTS.md)，[修复前证据](examples/races-v020.json)与[修复后证据](examples/races-v030.json)。
+
+### 0.2版历史：从权限演示深入到授权检索
 
 本轮修复五项已复现的输入/资源/审计问题，并增加 **先授权后评分** 的本地精确关键词检索。技术问题、根因、旧版/新版证据和生产方案见[技术深挖报告](docs/TECHNICAL_DEEP_DIVE.md)。
 
@@ -17,7 +28,7 @@
 - 会话签发前清理过期项，限制容量，支持本进程按租户成员批量撤销。
 - 新增 POST /v1/retrieve，返回授权文档片段和版本引用；尚非语义RAG。
 
-本地164项测试、16组对照；历史0.1版基线仍保留。已知限制包括处理中撤销的身份快照窗口、内存存储与非持久审计，不称为生产就绪。
+0.2当时本地164项测试、16组对照；历史0.1版基线仍保留。0.3缩小了处理中撤销的身份快照窗口，但内存存储与非持久审计仍未解决，不称为生产就绪。
 
 ## 1. 与已有项目的区别
 
@@ -57,11 +68,12 @@ python -m pip install -r requirements.lock
 python -X utf8 -m doclab experiment
 python -X utf8 -m pytest -q
 python -X utf8 -m doclab.live_smoke
+python -X utf8 -m doclab.race_diagnostics
 ```
 
 experiment 使用 FastAPI TestClient 在进程内执行16组固定合成请求，每组同时跑缺陷版与修复版，返回状态、是否符合预期、是否修改内存数据及审计证据。完整输出见[可重现报告](examples/report.json)，测试会精确对比报告。
 
-live_smoke 则启动真正的回环 HTTP 服务，验证自身读取、同租户他人拒绝、跨租户拒绝、匿名拒绝和列表过滤，结束后关闭服务；不打印会话令牌。
+live_smoke 则启动真正的回环 HTTP 服务，验证自身读取、同租户他人拒绝、跨租户拒绝、匿名拒绝、列表/检索过滤，以及评分期间变更/撤销的拦截，结束后关闭服务；不打印会话令牌。race_diagnostics输出四项有限本地竞态的结果，测试精确对比公开证据。
 
 ## 3. 修复前后对照
 
@@ -100,7 +112,9 @@ live_smoke 则启动真正的回环 HTTP 服务，验证自身读取、同租户
 | PATCH /v1/documents/{id} | 仅允许 title/text，必须提供 expected_version |
 | POST /v1/retrieve | 仅query/top_k；先过滤对象权限，再字面评分及返回版本引用 |
 
-PATCH 的授权、版本比较和更新在同一进程锁内完成。旧版本返回409，保护并发更新不互相覆盖。id、tenant_id、owner_id、version 不接受客户端直接赋值。没有创建、删除、公开令牌签发或任意文件读取接口。
+PATCH 的会话复核、授权、版本比较和更新在同一进程的会话→文档锁内完成。旧版本返回409，保护并发更新不互相覆盖。成功响应开始前还会复核会话、当前权限和版本；变化则401/409。id、tenant_id、owner_id、version 不接受客户端直接赋值。没有创建、删除、公开令牌签发或任意文件读取接口。
+
+注意：PATCH完成赋值后再发生撤销，可导致响应401但修改保留。失败状态不是回滚承诺，不能盲目自动重试；详见[提交与发布语义](docs/REVOCATION_CHECKPOINTS.md#3-已提交的修改不等于还能安全返回)。
 
 ### 精确关键词检索
 
@@ -139,7 +153,7 @@ curl --noproxy "*" http://127.0.0.1:8000/v1/documents/doc-a-bob -H "Authorizatio
 - 写入要求版本；拒绝时测试确认内存数据未改变。
 - 请求体最大64 KiB、最多1024个ASGI帧、总读取期限5秒；非法/重复JSON不回显正文，关键头重复拒绝。
 - 所有响应使用 Cache-Control: no-store，避免依赖缓存保存受限内容。
-- 审计包含服务端 request_id、行为者、租户、角色、动作、资源、理由和状态；不记录 Authorization 或文档内容。
+- 审计包含服务端 request_id、行为者、租户、角色、动作、资源、理由、状态和mutation_committed；后者区分写入副作用，allowed仅表示HTTP成功。不记录 Authorization、会话摘要或文档内容。
 - 审计只保留最近256条，增加UTC时间、序号和覆盖计数；常规未处理异常也记录。无公开审计接口，不是持久取证日志。
 
 [报告](examples/report.json)去掉每次变化的 request_id 和 timestamp，保留可重现的授权理由；真实响应头与内存事件仍有相同ID，便于关联。内部原因区分 tenant_mismatch、owner_mismatch、read_only_role、version_conflict 等，公开404不暴露这些细节。
@@ -153,14 +167,14 @@ curl --noproxy "*" http://127.0.0.1:8000/v1/documents/doc-a-bob -H "Authorizatio
 - 令牌失窃后，攻击者可在其有效期内冒用该会话。没有MFA、设备绑定、速率限制或集中撤销。
 - 数据、会话和审计都在单进程内存，不能用于多进程一致性或持久化；重启重置四份样本。
 - 已有授权后精确关键词检索及合成文档版本引用，但没有语义/向量检索、标准原文引用、LLM答案授权或模型提示词安全；不证明下游无泄漏。
-- 本进程主体撤销拒绝新请求；已经持有身份快照的处理中请求仍可能完成，有专门测试说明此限制。
+- 本进程主体撤销会在写入/发布检查点生效；最终复核通过到实际发送仍有窗口，不能撤回已发内容。候选集任一旧文档变化都可能触发409，包括非命中项；没有完整可串行化查询或跨进程保证。
 - 未做生产压测、真实客户部署、跨服务完整性证明或独立安全审计；通过测试不代表全部授权漏洞已排除。
 
 详细[威胁模型](docs/THREAT_MODEL.md)、[修复与集成建议](docs/REMEDIATION.md)与[验证记录](docs/VALIDATION.md)。
 
 ## 8. 测试、结构与岗位能力
 
-测试包括完整角色×对象×动作矩阵、API正反例、到期/撤销/篡改令牌、假身份请求头、批量赋值、并发版本冲突、错误输入、审计脱敏及16场景报告重放。GitHub Actions跑Windows/Linux × Python 3.11/3.12/3.13，依赖锁定，Actions固定提交SHA。
+测试包括完整角色×对象×动作矩阵、API正反例、到期/撤销/篡改令牌、假身份请求头、批量赋值、并发版本冲突、错误输入、审计脱敏、16场景报告重放，以及撤销/权限/版本竞态、租约/锁顺序和提交后响应失败的专项回归。GitHub Actions跑Windows/Linux × Python 3.11/3.12/3.13，依赖锁定，Actions固定提交SHA。
 
 ```text
 doclab/
@@ -169,12 +183,16 @@ doclab/
   api.py            对象API、列表/检索过滤、更新锁与审计
   ingress.py        严格JSON、关键头与有界请求
   retrieval.py      授权快照的精确关键词评分
+  publication.py    成功响应开始前的会话/权限/版本复核
   diagnostics.py    五项修复探针
+  race_diagnostics.py 四项有限竞态探针
   experiment.py     进程内修复前后对照
   live_smoke.py     真实回环HTTP验证与清理
 fixtures/           五个合成身份、四份文档、16场景
 examples/report.json
 tests/test_lab.py
+tests/test_deepening.py
+tests/test_checkpoints.py
 docs/
 ```
 
